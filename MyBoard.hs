@@ -1,4 +1,4 @@
-module MyBoard (Board(initialize, click, flag, won, lost), MyBoard) where
+module MyBoard (Board(initialize, click, flag, won, lost), MyBoard(width, height, clickedCells), isMasked, isBomb, isFlagged, isClicked) where
 
 import System.Random
 import Data.List (nub)
@@ -65,10 +65,10 @@ instance Board MyBoard where
 
     flag cell board@(Board w h bombs masked flags clicked) 
       | not $ inBounds cell board = board
-      | otherwise = Board w h bombs newMasked newFlags newClicked
+      | isClicked cell board = board
+      | otherwise = Board w h bombs newMasked newFlags clicked
          where newMasked = Set.delete cell masked
                newFlags = Set.insert cell flags
-               newClicked = Map.delete cell clicked -- to cover the corner case where you flag a clicked cell
 
     click cell board
         | not $ inBounds cell board = board
