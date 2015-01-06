@@ -1,4 +1,4 @@
-module MyBoard (Board(initialize, click, flag, won, lost), MyBoard(width, height, clickedCells), isMasked, isBomb, isFlagged, isClicked) where
+module MyBoard (Board(initialize, click, flag, won, lost), MyBoard(width, height, clickedCells, bombs), isMasked, isBomb, isFlagged, isClicked) where
 
 import System.Random
 import Data.List (nub)
