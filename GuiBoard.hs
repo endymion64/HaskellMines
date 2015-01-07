@@ -1,22 +1,28 @@
 import Graphics.UI.Gtk
+
 import Control.Monad
 import Control.Monad.Trans(liftIO)
 import Control.Concurrent
-import Control.Concurrent.MVar
+
 import System.Random
 import System.Exit
+
 import qualified Data.Set as Set
 import qualified Data.Map.Strict as Map
-import MyBoard as Board
+import Data.IORef
 
-type Cell = (Int, Int)
+import MyBoard
+
 data MyGUI = GUI { window :: Window
                  , timer :: Label
+                 , timerOn :: IORef Bool
+                 , timerThread :: IORef ThreadId
                  , counter :: Label
                  , table :: Table
                  , resetButton :: Button
                  }
---main :: IO ()
+
+main :: IO ()
 main = do
     initGUI
     dim <- askBoardSize
@@ -28,24 +34,36 @@ askBoardSize = do
     w <- readLn
     putStrLn "What is the height of the board?"
     h <- readLn
-
     --dialog <- dialogNewWithButtons
     --dialogAddButton
     --dialogAddActionWidget 
-    --windowSetModal dialog 
     return (w, h)
 
---gameLoop :: (Int,Int) -> IO ()
+gameLoop :: (Int,Int) -> IO ()
 gameLoop dim = do
+    -- creates the GUI of the game
     gui <- makeGUI dim
+    -- pick a random seed and create a board
     seed <- randomIO :: IO Int
-    putStrLn $ show seed
-    -- sets the initial board internally
     -- we now allow that the first click in the GUI results in losing the game!
-    let theBoard = Board.initialize 2562498 dim (-1,-1) :: MyBoard -- currently a fixed seed for testing
+    let theBoard = MyBoard.initialize seed dim (-1,-1) -- for testing i used seed 2562498
+    -- do some adjustments to the GUI
     labelSetText (counter gui) (show (Set.size (bombs theBoard)))
-    -- per flag -1
-    -- per unflag +1
+    -- sets the timer "on first click" (since it results in a removal of the cell)
+    (table gui) `on` remove $ (\_ -> do isTimerOn <- readIORef (timerOn gui)
+                                        if isTimerOn
+                                        then return ()
+                                        else do atomicModifyIORef' (timerOn gui) (\_ -> (True,()))
+                                                startTimer (timer gui) >>= (\id -> atomicModifyIORef' (timerThread gui) (\_ -> (id,())))
+                                                return ())
+    (window gui) `on` deleteEvent $ do liftIO $ readIORef (timerThread gui) >>= killThread
+                                       liftIO mainQuit
+                                       return False
+    (resetButton gui) `on` buttonActivated $ do readIORef (timerThread gui) >>= killThread
+                                                widgetDestroy (window gui)
+                                                postGUIAsync mainQuit
+                                                main 
+    -- let the game begin                                     
     updateTable gui theBoard
     widgetShowAll (window gui)
     mainGUI
@@ -59,46 +77,39 @@ startTimer timeLabel = do
                                      printTime (t+1)
                 printTime 1
 
--- eerste klik zou timer moeten starten
--- reset knop zou nieuw bord moeten geven, timer resetten en COUNTER
-
 makeGUI dim@(w,h)= do
     window <- windowNew
-    window `on` deleteEvent $ liftIO mainQuit >> return False
-
-    topbox <- vBoxNew True 1
+    
+    topbox <- vBoxNew False 5
 
     timerBox <- hBoxNew True 0
     timerText <- labelNew (Just "Time: ")
     timeLabel <- labelNew (Just "0")
-    boxPackStart timerBox timerText PackNatural 0
-    boxPackStart timerBox timeLabel PackNatural 0
-    boxPackStart topbox timerBox PackNatural 0
+    boxPackStart timerBox timerText PackRepel 0
+    boxPackStart timerBox timeLabel PackRepel 0
+    boxPackStart topbox timerBox PackRepel 0
+
+    timerOn <- newIORef False
+    currentThread <- myThreadId
+    timerThread <- newIORef currentThread
 
     counterBox <- hBoxNew True 0
     counterText <- labelNew (Just "Bombs left: ")
     countLabel <- labelNew (Just "0")
-    boxPackStart counterBox counterText PackNatural 0
-    boxPackStart counterBox countLabel PackNatural 0
-    boxPackStart topbox counterBox PackNatural 0
+    boxPackStart counterBox counterText PackRepel 0
+    boxPackStart counterBox countLabel PackRepel 0
+    boxPackStart topbox counterBox PackRepel 0
 
     table <- tableNew w h True
     boxPackStart topbox table PackNatural 0
 
-    startButton <- buttonNew
-    set startButton [buttonLabel := "Start"]
-    startButton `on` buttonActivated $ do void $ startTimer timeLabel
-    boxPackStart topbox startButton PackNatural 0
-
     resetButton <- buttonNew
     set resetButton [buttonLabel := "Reset"]
-    resetButton `on` buttonActivated $ do main -- delete previous window???
-    boxPackStart topbox resetButton PackNatural 0
+    boxPackStart topbox resetButton PackRepel 0
 
-    set window [windowTitle := "Minesweeper", containerBorderWidth := 10 , containerChild := topbox]
+    set window [windowTitle := "Minesweeper", containerBorderWidth := 5 , containerChild := topbox]
 
-    return $ GUI window timeLabel countLabel table resetButton
-
+    return $ GUI window timeLabel timerOn timerThread countLabel table resetButton
 
 onLeftRight :: Button -> IO () -> IO () -> IO ()
 onLeftRight btn left right = do
@@ -109,9 +120,9 @@ onLeftRight btn left right = do
   return ()
 
 updateTable gui newBoard
-    | won newBoard = do putStrLn "OMG, much win! Wow, amazing!"
+    | won newBoard = do makeAnnouncement "OMG, much win! Wow, amazing!"
                         transformTable gui newBoard True
-    | lost newBoard = do putStrLn "LMFAO, such loser!"
+    | lost newBoard = do makeAnnouncement "LMFAO, such loser!"
                          transformTable gui newBoard True
     | otherwise = transformTable gui newBoard False
 
@@ -123,7 +134,6 @@ transformTable gui board endOfGame = do
           children
     mapM_ (updateFieldOfTable gui board endOfGame) coordinates
 
--- dirty in my opinion
 updateFieldOfTable gui board endOfGame cell@(x,y) = do
     let tab = table gui
     if endOfGame && (isBomb cell board)
@@ -159,4 +169,9 @@ updateFieldOfTable gui board endOfGame cell@(x,y) = do
                          tableAttachDefaults tab adjLabel x (x+1) y (y+1)
                          widgetShow adjLabel
 
-addToCounter gui val = labelGetText (counter gui) >>= (\prev -> readIO prev >>= (\xx -> labelSetText (counter gui) . show $ xx+val ))
+addToCounter gui val = labelGetText (counter gui) >>= readIO >>= (\xx -> labelSetText (counter gui) . show $ xx+val)
+
+makeAnnouncement message = do
+    dialog <- messageDialogNew Nothing [] MessageInfo ButtonsOk message
+    dialogRun dialog -- blocks program until button is clicked
+    widgetDestroy dialog
