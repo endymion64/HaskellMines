@@ -19,7 +19,7 @@ instance (Random x, Random y) => Random (x, y) where
  
 -- The show instance must be highly customized to display a board in ASCII
 class Show b => Board b where
-  -- Create a board from seed, dimension and first click (avoid immediate loosing)
+  -- Create a board from seed, dimension and first click
   initialize :: Int -> (Int, Int) -> (Int, Int) -> b
   -- Click a cell on the board (no effect if out-of-bounds)
   click :: (Int,Int) -> b -> b
