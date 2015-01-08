@@ -1,4 +1,4 @@
-module Main (main) where
+module CLI (main) where
 
 import MyBoard
 

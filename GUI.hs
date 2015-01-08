@@ -1,3 +1,5 @@
+module GUI (main) where
+
 import Graphics.UI.Gtk
 import Control.Monad
 import Control.Monad.Trans(liftIO)
@@ -38,7 +40,7 @@ askBoardSize = do
     boxPackStart upper heightSpin PackRepel 0
     dialogAddButton dialog "Ok" ResponseOk
     widgetShowAll dialog
-    response <- dialogRun dialog
+    dialogRun dialog
     w <- spinButtonGetValueAsInt widthSpin
     h <- spinButtonGetValueAsInt heightSpin
     widgetDestroy dialog
