@@ -150,6 +150,7 @@ transformTable gui board endOfGame = do
     mapM_ (\child -> containerRemove (table gui) child >> widgetDestroy child) 
           children
     mapM_ (updateFieldOfTable gui board endOfGame) coordinates
+    widgetShowAll (window gui)
 
 updateFieldOfTable :: MyGUI -> MyBoard -> Bool -> (Int, Int) -> IO ()
 updateFieldOfTable gui board endOfGame cell@(x,y) = do
@@ -157,13 +158,11 @@ updateFieldOfTable gui board endOfGame cell@(x,y) = do
     if endOfGame && (isBomb cell board)
        then do image <- imageNewFromFile "img/bomb.png"
                tableAttachDefaults tab image x (x+1) y (y+1)
-               widgetShow image
        else if (isFlagged cell board)
             then do button <- buttonNew
                     image <- imageNewFromFile "img/flag.png"
                     buttonSetImage button image
                     tableAttachDefaults tab button x (x+1) y (y+1)
-                    widgetShow button
                     if endOfGame
                        then return ()
                        else onLeftRight button 
@@ -175,7 +174,6 @@ updateFieldOfTable gui board endOfGame cell@(x,y) = do
                          image <- imageNewFromFile "img/masked.png"
                          buttonSetImage button image
                          tableAttachDefaults tab button x (x+1) y (y+1)
-                         widgetShow button
                          if endOfGame
                             then return ()
                             else onLeftRight button 
@@ -185,7 +183,6 @@ updateFieldOfTable gui board endOfGame cell@(x,y) = do
                  else do let adjBombs = Map.findWithDefault 0 cell (clickedCells board)
                          adjLabel <- labelNew (Just (show adjBombs))
                          tableAttachDefaults tab adjLabel x (x+1) y (y+1)
-                         widgetShow adjLabel
 
 stopGame :: MyGUI -> String -> MyBoard -> IO ()
 stopGame gui message lastBoardToShow = do 
